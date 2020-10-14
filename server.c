@@ -101,6 +101,73 @@ void echo(int connfd)
     printf("server returning a http message with the following content.\n%s\n",buf);
     write(connfd, buf,strlen(httpmsg));
 
+
+    //Start processing request
+    if(strlen(buf)!= 0)
+    {
+      cmd = strtok(buf, delim);
+      file = strtok(NULL, delim);
+
+      if(strncmp(cmd, "GET", 3) == 0 && file != NULL)
+      {
+        if(strncmp(file, "/" , 2))
+        {
+          file = "index.html";
+        }
+        else
+        {
+          file++;
+        }
+        printf("%s\n", file);
+        fileType = getFileType(file);
+        printf("%s\n", file);
+        strcpy(fileType1, fileType);
+        FILE *filePointer;
+        filePointer = fopen(file, "rb");
+
+        //get the size of the file
+        if(filePointer > 0)
+        {
+          //determine the size of the file
+          fseek(filePointer, 0 , SEEK_END); //set offset to the end
+          fileSize = ftell(filePointer);
+          rewind(filePointer); //put file position back
+          sprintf(size, "%d", fileSize); //send formatted file size to size variable
+        }
+        else
+        {
+          strcpy(buf, "HTTP/1.1 500 Internal Server Error\n");
+          write(connfd, buf, strlen(buf));
+        }
+
+        //construct the http message
+        strcat(httpmsg, fileType1);
+        strcat(httpmsg, "\r\nContent-Length:");
+        strcat(httpmsg, size);
+        strcat(httpmsg,"\r\n\r\n");
+        printf("httpmsg:%s\n",httpmsg);
+
+        if (filePointer != NULL)
+        {
+          strcpy(buf, httpmsg);
+          //Indicate successful HTTP request to client
+          write(connfd, buf, strlen(buf));
+
+          while((packetSize = fread(fileBuffer,1, MAXLINE-1,filePointer)) > 0)
+          {
+            //Send to Client
+            if(send(connfd, fileBuffer, packetSize, 0) < 0)
+            {
+              printf("An error has occured\n");
+            }
+            bzero(fileBuffer, MAXLINE);
+            printf("Succesfully read %d bytes", packetSize);
+          }
+        }
+      }
+
+    }
+
 }
 
 /*
