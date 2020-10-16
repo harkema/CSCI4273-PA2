@@ -18,26 +18,18 @@
 #define MAXBUF   8192  /* max I/O buffer size */
 #define LISTENQ  1024  /* second argument to listen() */
 
-/*
-.html = text/html
-.txt = text/plain
-.png = image/png
-.gif = image/gif
-.jpg = image/jpg
-.css = text/css
-.js = application/javascript
-*/
-
 
 int open_listenfd(int port);
 void echo(int connfd);
 void *thread(void *vargp);
 const char delim[6] = " \n\0";
 
+//Determine what kind of file is being requested, and make sure it is associated with the proper directory
 char* getTypes(char* newFile)
 {
+    //Get pointer to the the actual file name
     char* fileType = strrchr(newFile,'.');
-    //printf("%s\n\n\n",fileType);
+
     if (fileType == NULL)
         return "na";
     if (strcmp(fileType,".html") == 0)
@@ -54,27 +46,34 @@ char* getTypes(char* newFile)
         fileType = "text/css";
     else if (strcmp(fileType, ".js") == 0)
         fileType = "application/javascript";
-    //printf("%s\n\n\n",fileType);
+
     return fileType;
 }
 
 int main(int argc, char **argv)
 {
+
+    //Create socket structs and maintain server loop
     int listenfd, *connfdp, port, clientlen=sizeof(struct sockaddr_in);
     struct sockaddr_in clientaddr;
     pthread_t tid;
 
-    if (argc != 2) {
-	fprintf(stderr, "usage: %s <port>\n", argv[0]);
-	exit(0);
+    if (argc != 2)
+    {
+	     fprintf(stderr, "usage: %s <port>\n", argv[0]);
+	     exit(0);
     }
     port = atoi(argv[1]);
 
+    //Create socket
     listenfd = open_listenfd(port);
-    while (1) {
-	connfdp = malloc(sizeof(int));
-	*connfdp = accept(listenfd, (struct sockaddr*)&clientaddr, &clientlen);
-	pthread_create(&tid, NULL, thread, connfdp);
+
+    while (1)
+    {
+	     connfdp = malloc(sizeof(int));
+	     *connfdp = accept(listenfd, (struct sockaddr*)&clientaddr, &clientlen);
+       //Use pthread to process large requests
+	     pthread_create(&tid, NULL, thread, connfdp);
     }
 }
 
@@ -106,42 +105,55 @@ void echo(int connfd)
     char size[32];
     char httpmsg[MAXLINE] = "HTTP/1.1 200 Document Follows\r\nContent-Type:";
 
-    n = read(connfd, buf, MAXLINE); // connection and request coming into the server from the client into the buffer
+    //Read from file (connfd) into buf
+    n = read(connfd, buf, MAXLINE);
+
     printf("server received the following request:\n%s\n",buf);
 
-    printf("strlen of buffer %d\n", strlen(buf));
     if(strlen(buf) != 0)
     {
-        cmd = strtok(buf,delim); // tokenize the command (in this case always a GET)
-        file = strtok(NULL,delim); // tokenize the requested file
+        //Creeate tokens of the commands - should always be GET and files
+        cmd = strtok(buf,delim);
+        file = strtok(NULL,delim);
 
         if(strncmp(cmd,"GET",3) == 0 && file != NULL)
         {
 
+          //If there is a file noted, then display index
             if(strncmp(file,"/",2) == 0)
             {
                 file = "index.html"; // default webpage
             }
             else
             {
-                file++; // moves the char array pointer over 1 to get rid of initial / (slash)
+                //If not the default, move to next file
+                file++;
             }
 
-            printf("FILE: %s\n", file);
-            type = getTypes(file); // function that will determine the type of file being requested
-            printf("FILE: %s\n", file);
+            printf("Requested File: %s\n", file);
+
+            //Get the type of the file and associate with proper directory
+            type = getTypes(file);
+
+            //This saves the file type to be displayed within the HTTP message
             strcpy(fileType,type);
             FILE *fp; // file pointer
-            fp = fopen(file,"rb"); // open the file
+
+            //Open the file requested by the server
+            fp = fopen(file,"rb");
 
 
             if(fp > 0)
             {
-                /* quick little trick to determine the size of the file */
+                //Determine the file size
+                //Ptr to end of file
                 fseek(fp,0,SEEK_END);
+                //Returns the current file position - used to determine file size
                 fSz = ftell(fp);
+                //Return to original position
                 rewind(fp);
-                sprintf(size,"%d",fSz); // set our size variable to the file size
+                //Size == file size
+                sprintf(size,"%d",fSz);
             }
 
             else
@@ -151,8 +163,9 @@ void echo(int connfd)
             }
 
 
-            /* put all of the details of the httpmsg together */
+            //Construct the HTTP Message
             strcat(httpmsg,fileType);
+
             strcat(httpmsg,"\r\nContent-Length:");
             strcat(httpmsg,size);
             strcat(httpmsg,"\r\n\r\n");
@@ -162,16 +175,21 @@ void echo(int connfd)
 
             if(fp != NULL)
             {
+                //Copy HTTP msg to buf that will be read by client
                 strcpy(buf,httpmsg);
-                write(connfd, buf,strlen(buf)); // send the httpmsg off to the client
-                while((packetSize = fread(filebuffer,1,MAXLINE-1,fp)) > 0) // while there is still file data to be read
+
+                //Write to the client
+                write(connfd, buf,strlen(buf));
+
+                //While loop to keep writing file to be viewed by client
+                while((packetSize = fread(filebuffer,1,MAXLINE-1,fp)) > 0)
                 {
-                    if(send(connfd, filebuffer, packetSize, 0) < 0) // send the file data off to the client
+                    if(send(connfd, filebuffer, packetSize, 0) < 0)
                     {
                         printf("Error\n");
                     }
-                    bzero(filebuffer,MAXLINE); // zero out the buffer
-                    printf("read %d bytes of data", packetSize); // housekeeping
+                    bzero(filebuffer,MAXLINE);
+                    printf("read %d bytes of data", packetSize);
                 }
             }
 
@@ -209,6 +227,7 @@ int open_listenfd(int port)
         return -1;
 
     /* Make it a listening socket ready to accept connection requests */
+    //Put in listening mode
     if (listen(listenfd, LISTENQ) < 0)
         return -1;
     return listenfd;
