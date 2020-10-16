@@ -2,7 +2,7 @@
 Kiana Harkema
 106102554
 
-All code is in c; utilizes mult-threading
+All code is in c; utilizes multi-threading
 
 Compiliation should be done within the /www directory
 
